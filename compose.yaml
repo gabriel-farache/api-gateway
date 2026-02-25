@@ -1,0 +1,103 @@
+# DCM API Gateway and managers. Run from api-gateway.
+# With make clone-deps (clones managers to /tmp by default): make compose-up
+# With sibling repos: DCM_MANAGERS_DIR unset, so build context is .. (parent dir).
+# Optional: set DCM_MANAGERS_DIR to the directory containing the manager repos.
+#
+# Credentials: set POSTGRES_USER and POSTGRES_PASSWORD in the environment or in
+# a .env file (see .env.example). Defaults are for local dev only.
+
+# Shared DB connection env (YAML anchor); services merge it with <<: *db-common and add DB_NAME.
+x-db-common: &db-common
+  DB_TYPE: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: ${POSTGRES_USER:-admin}
+  DB_PASS: ${POSTGRES_PASSWORD:-adminpass}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
+
+services:
+  gateway:
+    image: docker.io/krakend/krakend:2.6
+    command: ["run", "-c", "/etc/krakend/krakend.json"]
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./config/krakend.json:/etc/krakend/krakend.json:ro
+    depends_on:
+      service-provider-manager: { condition: service_started }
+      catalog-manager: { condition: service_started }
+      policy-manager: { condition: service_started }
+      placement: { condition: service_started }
+
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./hack/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  service-provider-manager:
+    build:
+      context: ${DCM_MANAGERS_DIR:-..}/service-provider-manager
+      dockerfile: Containerfile
+    environment:
+      <<: *db-common
+      DB_NAME: service-provider
+      SVC_ADDRESS: ":8080"
+    expose:
+      - "8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  catalog-manager:
+    build:
+      context: ${DCM_MANAGERS_DIR:-..}/catalog-manager
+      dockerfile: Containerfile
+    environment:
+      <<: *db-common
+      BIND_ADDRESS: ":8080"
+      DB_NAME: catalog-manager
+    expose:
+      - "8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  policy-manager:
+    build:
+      context: ${DCM_MANAGERS_DIR:-..}/policy-manager
+      dockerfile: Containerfile
+    environment:
+      <<: *db-common
+      BIND_ADDRESS: ":8080"
+      LOG_LEVEL: info
+      DB_NAME: policy-manager
+    expose:
+      - "8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  placement:
+    build:
+      context: ${DCM_MANAGERS_DIR:-..}/placement-manager
+      dockerfile: Containerfile
+    environment:
+      <<: *db-common
+      BIND_ADDRESS: ":8080"
+      DB_NAME: placement-manager
+    expose:
+      - "8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  postgres_data: {}
