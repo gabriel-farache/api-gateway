@@ -21,7 +21,7 @@ services:
     ports:
       - "9080:9080"
     volumes:
-      - .:/workspace:ro
+      - .:/workspace:ro,z
     depends_on:
       service-provider-manager: { condition: service_started }
       catalog-manager: { condition: service_started }
@@ -38,7 +38,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./hack/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./hack/postgres-init:/docker-entrypoint-initdb.d:ro,z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d postgres"]
       interval: 5s
@@ -121,7 +121,7 @@ services:
       KUBERNETES_NAMESPACE: ${KUBEVIRT_NAMESPACE:-default}
       KUBERNETES_KUBECONFIG: /kubeconfig
     volumes:
-      - ${KUBEVIRT_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro
+      - ${KUBEVIRT_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
     depends_on:
       service-provider-manager: { condition: service_started }
 
@@ -153,7 +153,7 @@ services:
     expose:
       - "8080"
     volumes:
-      - ${K8S_CONTAINER_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro
+      - ${K8S_CONTAINER_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
     depends_on:
       service-provider-manager: { condition: service_started }
       nats: { condition: service_started }
